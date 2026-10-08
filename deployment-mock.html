@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Deployment — HAOS + UniFi 6-VLAN</title>
+<style>
+  :root{
+    --bg:#0b0f17;--bg2:#0e1420;--panel:#121a28;--line:#243247;--line2:#1a2536;
+    --ink:#e8eef7;--sub:#8fa3bd;--dim:#61718c;
+    --mgmt:#3fb6c8;--trusted:#57b368;--iot:#c98b3a;--cam:#9a72d6;--guest:#e0655a;--srv:#4fd1c5;
+    --ok:#4bd07a;--no:#e5624a;--lim:#e5b445;--accent:#5aa8ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 700px at 70% -10%,#131d2e,#0b0f17 55%);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1360px;margin:0 auto;padding:26px 22px 80px}
+  header h1{font-size:25px;margin:0;font-weight:700}
+  header h1 .k{color:var(--srv)}
+  header p{color:var(--sub);font-size:13px;margin:6px 0 0}
+  .tag{display:inline-block;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--accent);
+    border:1px solid rgba(90,168,255,.4);background:rgba(90,168,255,.12);padding:3px 9px;border-radius:20px;margin-top:10px}
+  h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin:30px 0 12px;display:flex;align-items:center;gap:10px}
+  h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+  .card{background:linear-gradient(180deg,rgba(20,29,45,.9),rgba(12,18,28,.9));border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 6px 22px rgba(0,0,0,.4)}
+
+  /* topology */
+  .topo{display:flex;flex-direction:column;align-items:center;gap:0}
+  .node{background:var(--bg2);border:1.5px solid var(--line);border-radius:11px;padding:10px 16px;text-align:center;min-width:150px}
+  .node .t{font-size:13.5px;font-weight:600}
+  .node .s{font-size:10.5px;color:var(--sub);margin-top:2px;font-variant-numeric:tabular-nums}
+  .node.gw{border-color:var(--accent);border-width:2px}
+  .node.sw{border-color:var(--mgmt)}
+  .spine{width:2px;height:18px;background:var(--line)}
+  .aprow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:720px}
+  .ap{background:var(--bg2);border:1.5px solid var(--line);border-left:3px solid var(--mgmt);border-radius:9px;padding:7px 11px;font-size:11.5px}
+  .ap b{color:var(--ink)}
+  .legend-dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2)}
+  th{color:var(--dim);font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;font-weight:600}
+  td.vlan{font-weight:700}
+  .pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .pill.ok{background:rgba(75,208,122,.16);color:var(--ok)}
+  .pill.no{background:rgba(229,98,74,.16);color:var(--no)}
+  .pill.lim{background:rgba(229,180,69,.16);color:var(--lim)}
+  .vbar{width:4px;height:16px;border-radius:2px;display:inline-block;margin-right:8px;vertical-align:middle}
+
+  /* firewall matrix */
+  .fw td,.fw th{text-align:center;padding:7px 6px;font-size:11.5px}
+  .fw td:first-child,.fw th:first-child{text-align:left;font-weight:600}
+  .y{color:var(--ok)}.n{color:var(--no)}.c{color:var(--lim)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2)}
+  .step .n{flex:0 0 26px;height:26px;border-radius:50%;background:rgba(90,168,255,.15);border:1px solid rgba(90,168,255,.4);
+    color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .step .b{font-size:13px;line-height:1.5}
+  .step .b b{color:var(--ink)} .step .b span{color:var(--sub)}
+  .note{font-size:12px;color:var(--sub);background:rgba(90,168,255,.07);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 8px 8px 0;margin-top:10px;line-height:1.55}
+  code{background:#0a0e16;border:1px solid var(--line2);border-radius:5px;padding:1px 6px;font-size:11.5px;color:#cfe3ff}
+  .foot{margin-top:36px;color:var(--dim);font-size:11.5px;text-align:center;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="k">Client Deployment</span> — Home Assistant OS + UniFi 6-VLAN</h1>
+    <p>Repeatable remote-deployment design · UCG-Max · PoE switch · 7× APs · 6 VLANs · HAOS</p>
+    <span class="tag">Iteration 1 — draft for rework</span>
+  </header>
+
+  <h2>Network topology</h2>
+  <div class="card topo">
+    <div class="node gw"><div class="t">Internet / ISP</div><div class="s">WAN → UCG-Max</div></div>
+    <div class="spine"></div>
+    <div class="node gw"><div class="t">UCG-Max</div><div class="s">Gateway · router · firewall · UniFi controller</div></div>
+    <div class="spine"></div>
+    <div class="node sw"><div class="t">PoE Switch</div><div class="s">Pro Max / Standard · powers 7 APs + wired VLAN ports</div></div>
+    <div class="spine"></div>
+    <div class="aprow">
+      <div class="ap"><b>AP 1</b> · Living</div><div class="ap"><b>AP 2</b> · Kitchen</div>
+      <div class="ap"><b>AP 3</b> · Office</div><div class="ap"><b>AP 4</b> · Primary BR</div>
+      <div class="ap"><b>AP 5</b> · Basement</div><div class="ap"><b>AP 6</b> · Garage</div>
+      <div class="ap"><b>AP 7</b> · Outdoor</div>
+    </div>
+    <p style="color:var(--sub);font-size:11.5px;margin:12px 0 0">All 7 APs broadcast the SSID set below; each SSID is tagged onto its VLAN at the AP. Switch AP-uplink ports carry all VLANs (trunk) with Management native.</p>
+  </div>
+
+  <h2>VLAN plan <span style="color:var(--dim);font-size:10px;text-transform:none;letter-spacing:0">(edit subnets/names per client — this is the default scheme)</span></h2>
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>VLAN</th><th>Name</th><th>Subnet</th><th>Purpose</th><th>Internet</th><th>Key rule</th></tr></thead>
+      <tbody>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--mgmt)"></span>1</td><td>Management</td><td>native LAN</td><td>UCG-Max, switch, 7 APs, controller UIs</td><td><span class="pill lim">restricted</span></td><td>Native VLAN 1 (the UCG Default LAN); APs untagged here</td></tr>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--trusted)"></span>10</td><td>Trusted LAN</td><td>10.10.10.0/24</td><td>Laptops, phones, workstations, HA dashboard</td><td><span class="pill ok">full</span></td><td>Can reach HA + initiate to IoT via HA</td></tr>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--iot)"></span>20</td><td>IoT</td><td>10.10.20.0/24</td><td>Plugs, bulbs, TVs, speakers, Wi-Fi sensors</td><td><span class="pill lim">no LAN-init</span></td><td>mDNS reflected to Trusted+Servers for HA discovery</td></tr>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--cam)"></span>30</td><td>Cameras / NVR</td><td>10.10.30.0/24</td><td>UniFi Protect / IP cameras</td><td><span class="pill no">blocked</span></td><td>No WAN; reachable only by NVR + HA</td></tr>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--guest)"></span>40</td><td>Guest</td><td>10.10.40.0/24</td><td>Visitors</td><td><span class="pill ok">internet-only</span></td><td>UniFi Guest network; full internal isolation</td></tr>
+        <tr><td class="vlan"><span class="vbar" style="background:var(--srv)"></span>50</td><td>Servers / Home</td><td>10.10.50.0/24</td><td><b>HAOS</b>, NAS, home servers</td><td><span class="pill lim">restricted</span></td><td>HA lives here; allowed to reach IoT + cameras</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Inter-VLAN firewall matrix <span style="color:var(--dim);font-size:10px;text-transform:none;letter-spacing:0">(row = source, column = destination)</span></h2>
+  <div class="card" style="overflow-x:auto">
+    <table class="fw">
+      <thead><tr><th>from ↓ / to →</th><th>Mgmt</th><th>Trusted</th><th>IoT</th><th>Cameras</th><th>Guest</th><th>Servers</th><th>WAN</th></tr></thead>
+      <tbody>
+        <tr><td>Management</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="c">◐</td></tr>
+        <tr><td>Trusted</td><td class="n">✘</td><td class="y">✔</td><td class="c">◐ via HA</td><td class="c">◐ via HA</td><td class="n">✘</td><td class="y">✔</td><td class="y">✔</td></tr>
+        <tr><td>IoT</td><td class="n">✘</td><td class="c">◐ reply</td><td class="y">✔</td><td class="n">✘</td><td class="n">✘</td><td class="c">◐ reply</td><td class="c">◐</td></tr>
+        <tr><td>Cameras</td><td class="n">✘</td><td class="n">✘</td><td class="n">✘</td><td class="y">✔</td><td class="n">✘</td><td class="c">◐ reply</td><td class="n">✘</td></tr>
+        <tr><td>Guest</td><td class="n">✘</td><td class="n">✘</td><td class="n">✘</td><td class="n">✘</td><td class="y">✔</td><td class="n">✘</td><td class="y">✔</td></tr>
+        <tr><td>Servers (HA)</td><td class="n">✘</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="n">✘</td><td class="y">✔</td><td class="c">◐</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>✔</b> allow · <b>✘</b> block · <b>◐</b> allow established/related only (or scoped). The pattern: IoT &amp; Cameras can't start conversations toward Trusted/Mgmt — only reply. HA (Servers) is the one host allowed to <i>initiate</i> into IoT and Cameras, so it stays the single control point. Implement on UCG-Max with allow-established first, then per-VLAN block rules.</div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <h2>Wi-Fi SSIDs</h2>
+      <div class="card">
+        <table>
+          <thead><tr><th>SSID</th><th>VLAN</th><th>Band</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><b>Client-Home</b></td><td><span class="vbar" style="background:var(--trusted)"></span>10 Trusted</td><td>2.4+5+6</td><td>WPA3; main devices</td></tr>
+            <tr><td><b>Client-IoT</b></td><td><span class="vbar" style="background:var(--iot)"></span>20 IoT</td><td>2.4 (+5)</td><td>WPA2; many IoT are 2.4-only</td></tr>
+            <tr><td><b>Client-Guest</b></td><td><span class="vbar" style="background:var(--guest)"></span>40 Guest</td><td>2.4+5</td><td>Guest portal + isolation</td></tr>
+          </tbody>
+        </table>
+        <div class="note">Broadcast on all 7 APs. Keep IoT SSID reachable on 2.4 GHz everywhere (min-RSSI off for IoT). Optional: a hidden <code>Client-Cam</code> SSID only if any Wi-Fi cameras exist.</div>
+      </div>
+    </div>
+    <div>
+      <h2>Switch port profiles</h2>
+      <div class="card">
+        <table>
+          <thead><tr><th>Ports</th><th>Profile</th><th>PoE</th></tr></thead>
+          <tbody>
+            <tr><td>7× AP uplinks</td><td>Trunk: all VLANs, native <b>Mgmt</b></td><td>PoE+ / PoE++</td></tr>
+            <tr><td>NVR / cameras</td><td>Access <b>VLAN 30</b></td><td>PoE+ (cams)</td></tr>
+            <tr><td>HAOS host / NAS</td><td>Access <b>VLAN 50</b></td><td>—</td></tr>
+            <tr><td>Office / wired PCs</td><td>Access <b>VLAN 10</b></td><td>—</td></tr>
+            <tr><td>Uplink → UCG-Max</td><td>Trunk: all VLANs</td><td>—</td></tr>
+          </tbody>
+        </table>
+        <div class="note">Save these as named UniFi <b>Port Profiles</b> so each client deploy is "assign profile to port," not per-port VLAN fiddling — core to making this repeatable.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Home Assistant OS — placement &amp; integration</h2>
+  <div class="card">
+    <div class="step"><div class="n">◆</div><div class="b"><b>Lives on VLAN 50 (Servers)</b> <span>— static IP (e.g. 10.10.50.10). HAOS as a VM (Proxmox/mini-PC) or dedicated appliance.</span></div></div>
+    <div class="step"><div class="n">◆</div><div class="b"><b>Cross-VLAN device discovery</b> <span>— enable UniFi <i>mDNS/Multicast DNS</i> reflection on Trusted + IoT + Servers so HA auto-discovers IoT (HomeKit, Chromecast, ESPHome, printers) across the VLAN boundary. This is the #1 thing clients get wrong.</span></div></div>
+    <div class="step"><div class="n">◆</div><div class="b"><b>Remote access without port-forwarding</b> <span>— Tailscale add-on (your model) or Nabu Casa. No inbound WAN holes.</span></div></div>
+    <div class="step"><div class="n">◆</div><div class="b"><b>UniFi ↔ HA</b> <span>— UniFi Network integration in HA for presence, client tracking, and VLAN-aware automations; UniFi Protect integration for cameras on VLAN 30.</span></div></div>
+    <div class="step"><div class="n">◆</div><div class="b"><b>Resilience</b> <span>— nightly HA backups to NAS/offsite; document restore. Hand the client a one-pager.</span></div></div>
+  </div>
+
+  <h2>Deployment runbook — remote-repeatable</h2>
+  <div class="card">
+    <div class="step"><div class="n">1</div><div class="b"><b>Pre-stage.</b> <span>Adopt UCG-Max + switch + APs to the UniFi console (cloud or self-host). Firmware update. Set site name + admin + backup.</span></div></div>
+    <div class="step"><div class="n">2</div><div class="b"><b>Create the 6 networks/VLANs</b> <span>from the table (IDs, subnets, DHCP ranges, DNS). Template this.</span></div></div>
+    <div class="step"><div class="n">3</div><div class="b"><b>Firewall rules</b> <span>per the matrix: allow established/related, then per-VLAN isolation + the HA-is-the-only-initiator exceptions.</span></div></div>
+    <div class="step"><div class="n">4</div><div class="b"><b>Wi-Fi</b> <span>— create the 3 SSIDs → VLANs; apply AP group to all 7; tune min-RSSI/band steering.</span></div></div>
+    <div class="step"><div class="n">5</div><div class="b"><b>Switch</b> <span>— apply the named port profiles; label ports; verify PoE budget for 7 APs + cameras.</span></div></div>
+    <div class="step"><div class="n">6</div><div class="b"><b>mDNS reflection</b> <span>on Trusted/IoT/Servers.</span></div></div>
+    <div class="step"><div class="n">7</div><div class="b"><b>Deploy HAOS</b> <span>on VLAN 50, static IP, restore baseline config/HACS, Tailscale, integrations.</span></div></div>
+    <div class="step"><div class="n">8</div><div class="b"><b>Verify</b> <span>— device on each VLAN pulls correct DHCP; Guest can't see internal; IoT can't initiate to Trusted; HA discovers + controls IoT; cameras have no WAN. Screenshot for the client.</span></div></div>
+    <div class="step" style="border-bottom:none"><div class="n">9</div><div class="b"><b>Handover + monitoring</b> <span>— client one-pager, remote-support access (Tailscale/UniFi), and an ongoing check-in cadence (this lead wants a relationship, not a one-off).</span></div></div>
+    <div class="note">Make steps 2–6 a <b>UniFi site backup template</b> you restore onto each new console — then a deploy is "restore template → re-adopt hardware → tweak subnets → deploy HAOS." That's the repeatable remote product.</div>
+  </div>
+
+  <div class="foot">
+    Iteration 1 · defaults chosen to best-practice — tell me what to change (VLAN scheme, subnets, SSIDs, HA location, add Protect/VPN/etc.)<br>
+    Next: I can spin up a live HAOS VM + a UniFi Network controller on your Proxmox so you can click through and rehearse the actual config.
+  </div>
+</div>
+</body>
+</html>

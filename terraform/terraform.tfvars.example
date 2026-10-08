@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars per client and fill in. NEVER commit real secrets — pass
+# passwords via environment instead:  export TF_VAR_unifi_password=...  etc.
+
+unifi_api_url        = "https://192.168.1.1:8443"  # controller's mgmt IP (native LAN), or its Tailscale IP
+unifi_username       = "deploy"                    # a dedicated local super-admin you create (see README)
+unifi_site           = "default"
+unifi_allow_insecure = true                        # self-signed controller cert
+
+net_prefix  = "10.10"                          # re-IP the whole site with one value
+site_domain = "home.arpa"
+
+ssid_main  = "Smith-Home"
+ssid_iot   = "Smith-IoT"
+ssid_guest = "Smith-Guest"
+
+ha_ip = "10.10.50.10"
+
+# secrets — prefer env vars (TF_VAR_...), shown here only to document names:
+# wifi_pass_main  = "..."
+# wifi_pass_iot   = "..."
+# wifi_pass_guest = "..."
+# unifi_password  = "..."
